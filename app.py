@@ -5,10 +5,11 @@ import plotly.express as px
 
 st.set_page_config(layout="wide", page_title="LIMITER", page_icon="📊")
 
-# STROGO SKRIVANJE PROFILA, MENIJA I FORK-A ZA SVE KORISNIKE NA MOBILNOM I RAČUNARU
+# CSS ZAŠTITA: Briše profil, tri tačkice, fork i Streamlit oznake sa ekrana za sve korisnike
 st.markdown("""
 <style>
 .stApp { background-color: #f8f9fa; color: #212529; }
+[data-testid="stAppViewContainer"] { max-width: 1000px; margin: 0 auto; }
 [data-testid="stMetricValue"] { font-size: 2.2rem !important; line-height: 1.2 !important; font-weight: 700; }
 [data-testid="stMetricLabel"] { font-size: 1rem !important; color: #495057 !important; font-weight: 600; }
 .main-title { font-size: 2.5rem; font-weight: 700; color: #0a2540; margin-bottom: 2px; }
@@ -18,7 +19,6 @@ st.markdown("""
 .group-box { padding: 25px; background-color: #f1f3f5; border-radius: 8px; border: 2px dashed #0a2540; margin-bottom: 25px; }
 h3 { color: #0a2540 !important; font-weight: 700 !important; }
 
-/* CSS ZAŠTITA: Briše profil, tri tačkice, fork i Streamlit oznake sa ekrana */
 #MainMenu {visibility: hidden !important;}
 footer {visibility: hidden !important;}
 header {visibility: hidden !important;}
@@ -31,9 +31,12 @@ header {visibility: hidden !important;}
 st.markdown('<div class="main-title">📊 LIMITER</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Finansijski Monitor: PDV & Paušal Analitika</div>', unsafe_allow_html=True)
 
-fajl_putanja = "firme_podaci.xlsx"
+# VRAĆENA ISPRAVNA INTERNET PUTANJA ZA GOOGLE SHEETS
+google_sheet_id = "1YV7ZsVNK1Yn00_X858W3di7ou3SqhdYK"
+gid_broj = "253779614"
+fajl_putanja = f"https://google.com{google_sheet_id}/gviz/tq?tqx=out:csv&gid={gid_broj}"
 def ucitaj_i_analiziraj(putanja):
-    df_raw = pd.read_excel(putanja)
+    df_raw = pd.read_csv(putanja)
     df_raw.columns = [str(col).strip() for col in df_raw.columns]
     df_long = pd.melt(df_raw, id_vars=['Naziv', 'Tip'], var_name='Mesec_Tekst', value_name='Prihod')
     df_long['Prihod'] = pd.to_numeric(df_long['Prihod'], errors='coerce').fillna(0)
@@ -52,7 +55,7 @@ def ucitaj_i_analiziraj(putanja):
     
     izvestaj = []
     for firma, grupa in df_long.groupby('Naziv'):
-        cisti_tip = str(grupa['Tip'].iloc[0]).strip().lower()
+        cisti_tip = str(grupa['Tip'].iloc).strip().lower()
         
         je_pausal = 'paus' in cisti_tip or 'pauš' in cisti_tip
         je_udruzenje = 'udruz' in cisti_tip or 'udruž' in cisti_tip
@@ -73,7 +76,7 @@ def ucitaj_i_analiziraj(putanja):
         proc_pdv = (prihod_12m / 8000000) * 100
         
         preostalo_meseci, tip_limita = 999, ""
-        if prosecan_mesecni_prihod > 0 and not je_udruzenje:
+        if prosecan_mesecni_prihod > 0:
             if je_pausal and (6000000 - prihod_tekuce_godine) > 0:
                 preostalo_meseci = (6000000 - prihod_tekuce_godine) / prosecan_mesecni_prihod
                 tip_limita = "Limit 6 mil."
@@ -81,8 +84,7 @@ def ucitaj_i_analiziraj(putanja):
                 preostalo_meseci = (8000000 - prihod_12m) / prosecan_mesecni_prihod
                 tip_limita = "Limit PDV"
 
-        if je_udruzenje: predikcija_poruka = "✅ Izuzeto (Udruženje)"
-        elif preostalo_meseci == 999: predikcija_poruka = "✅ Stabilno u narednih 6+ meseci"
+        if preostalo_meseci == 999: predikcija_poruka = "✅ Stabilno u narednih 6+ meseci"
         elif preostalo_meseci <= 0: predikcija_poruka = f"🚨 Limit dostignut ({tip_limita})!"
         else:
             br_meseci = int(round(preostalo_meseci))
@@ -90,12 +92,12 @@ def ucitaj_i_analiziraj(putanja):
             buduca_godina = trenutni_datum.year + (trenutni_datum.month + br_meseci - 1) // 12
             predikcija_poruka = f"⚠️ {tip_limita} za {br_meseci} mes. ({buduci_mesec}/{buduca_godina})"
             
-        zona = "🟢 Bezbedno" if je_udruzenje else ("🔴 Visok rizik" if (proc_pdv >= 80 or proc_pausal >= 80 or preostalo_meseci <= 3) else ("🟡 Srednji rizik" if (60 <= proc_pdv < 80 or 60 <= proc_pausal < 80) else "🟢 Bezbedno"))
-        izvestaj.append({"Firma": firma, "Pravna Forma": forma_ispis, "Prihod (Tekuća god)": f"{prihod_tekuce_godine:,.2f} RSD" if je_pausal else "-", "Iskorišćenost 6 mil.": f"{proc_pausal:.1f}%" if je_pausal else "-", "Prihod (Poslednjih 12M)": f"{prihod_12m:,.2f} RSD" if not je_udruzenje else "-", "Iskorišćenost 8 mil.": f"{proc_pdv:.1f}%" if not je_udruzenje else "-", "Prognoza limita": predikcija_poruka, "Status": zona, "Sirov_Prihod_12M": prihod_12m, "Sirov_Prihod_2026": prihod_tekuce_godine})
+        zona = "🔴 Visok rizik" if (proc_pdv >= 80 or proc_pausal >= 80 or preostalo_meseci <= 3) else ("🟡 Srednji rizik" if (60 <= proc_pdv < 80 or 60 <= proc_pausal < 80) else "🟢 Bezbedno")
+        izvestaj.append({"Firma": firma, "Pravna Forma": forma_ispis, "Prihod (Tekuća god)": f"{prihod_tekuce_godine:,.2f} RSD" if je_pausal else "-", "Iskorišćenost 6 mil.": f"{proc_pausal:.1f}%" if je_pausal else "-", "Prihod (Poslednjih 12M)": f"{prihod_12m:,.2f} RSD", "Iskorišćenost 8 mil.": f"{proc_pdv:.1f}%", "Prognoza limita": predikcija_poruka, "Status": zona, "Sirov_Prihod_12M": prihod_12m, "Sirov_Prihod_2026": prihod_tekuce_godine})
     return pd.DataFrame(izvestaj), df_long, trenutni_datum
 try:
     rezultati_df, df_sve_mesecno, korisceni_mesec = ucitaj_i_analiziraj(fajl_putanja)
-    st.success(f"🎉 Podaci uspešno povučeni iz lokalne baze za presek: {korisceni_mesec.strftime('%m/%Y')}")
+    st.success(f"🎉 Podaci uspešno povučeni iz online baze za presek: {korisceni_mesec.strftime('%m/%Y')}")
     
     st.markdown('<div class="section-box">', unsafe_allow_html=True)
     k1, k2, k3 = st.columns(3)
@@ -107,18 +109,18 @@ try:
     st.markdown('<div class="section-box">', unsafe_allow_html=True)
     st.subheader("📋 Lista svih firmi sa dva kriterijuma i prognozom")
     izabrana_zona = st.multiselect("🔍 Filtrirajte tabelu:", ["🔴 Visok rizik", "🟡 Srednji rizik", "🟢 Bezbedno"], default=["🔴 Visok rizik", "🟡 Srednji rizik", "🟢 Bezbedno"])
-    prikaz_df = rezultati_df[rezultati_df["Status"].isin(izabrana_zona)].copy()
+    prikaz_df = rezultati_df[rezultati_df["Status"].isin(izabrana_zona)]
     
-    # POPRAVLJENO I SIGURNO: Pravimo čistu kopiju tabele samo za gledanje, matematika ostaje nedirnuta u rezultati_df
-    tabela_za_ekran = prikaz_df.drop(columns=["Sirov_Prihod_12M", "Sirov_Prihod_2026"], errors="ignore")
-    st.dataframe(tabela_za_ekran, use_container_width=True, hide_index=True)
+    # Kolone se brišu isključivo u ovoj jednoj liniji prikaza na ekranu mobilnog i računara
+    prikaz_za_ekran = prikaz_df.drop(columns=["Sirov_Prihod_12M", "Sirov_Prihod_2026"], errors="ignore")
+    st.dataframe(prikaz_za_ekran, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('<div class="group-box">', unsafe_allow_html=True)
     st.subheader("🏢 Grupe povezanih firmi (Zbirna konsolidacija)")
     izbor_grupe = st.radio("Izaberite grupu povezane poslovne mreže za analizu:", ["Activity Grupa", "Folklorić Grupa"], horizontal=True)
     kljucna_rec = "activity" if "Activity" in izbor_grupe else "folklori"
-    firme_u_grupi = rezultati_df[rezultati_df["Firma"].str.lower().str.contains(kljucna_rec)].copy()
+    firme_u_grupi = rezultati_df[rezultati_df["Firma"].str.lower().str.contains(kljucna_rec)]
     
     if len(firme_u_grupi) > 0:
         zbir_12m = firme_u_grupi[firme_u_grupi["Pravna Forma"] != "Udruženje"]["Sirov_Prihod_12M"].sum()
@@ -155,17 +157,15 @@ try:
         
         c1, c2 = st.columns(2)
         with c1: st.info(f"** TRENUTNE UKUPNE OBAVEZE GRUPE:**\n* **Ukupno plaćeno državi:** ~{trenutne_obaveze:,.2f} RSD\n* *Struktura:* {' + '.join(detalji_trenutnog)}")
-        with c2: st.warning(f"**🚨 POTENCIJALNE OBAVEZE (Kao jedno D.O.O. lice):**\n* **Zbirni PDV (20%):** ~{potencijalni_pdv:,.2f} RSD\n* **Porez na dobit (15%):** ~{potencijalni_porez_na_dobit:,.2f} RSD\n* *Razlika u trošku:* ~{ukupni_konsolidovani_trosak - tongue_obaveze if 'tongue_obaveze' in locals() else ukupni_konsolidovani_trosak - trenutne_obaveze:,.2f} RSD više obaveza!")
+        with c2: st.warning(f"**🚨 POTENCIJALNE OBAVEZE (Kao jedno D.O.O. lice):**\n* **Zbirni PDV (20%):** ~{potencijalni_pdv:,.2f} RSD\n* **Porez na dobit (15%):** ~{potencijalni_porez_na_dobit:,.2f} RSD\n* *Razlika u trošku:* ~{ukupni_konsolidovani_trosak - trenutne_obaveze:,.2f} RSD više obaveza!")
     else: st.warning("Nema firmi u tabeli koje odgovaraju ovom nazivu.")
     st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('<div class="profile-box">', unsafe_allow_html=True)
     izabrana_firma = st.selectbox("Izaberite firmu za detaljan pregled istorije:", sorted(rezultati_df["Firma"].unique()))
     if izabrana_firma:
-        # Prikazivanje statusa bez numpy ružnih zagrada na ekranu
-        status_niz = rezultati_df[rezultati_df["Firma"] == izabrana_firma]["Status"].values
-        status_tekst = str(status_niz[0]) if len(status_niz) > 0 else ""
-        st.subheader(f"📈 Prihod po mesecima za firmu {izabrana_firma} (Trenutni status: {status_tekst})")
+        status_vrijednost = rezultati_df[rezultati_df["Firma"] == izabrana_firma]["Status"].values[0]
+        st.subheader(f"📈 Prihod po mesecima za firmu {izabrana_firma} (Trenutni status: {status_vrijednost})")
         
         istorija_firme = df_sve_mesecno[df_sve_mesecno["Naziv"] == izabrana_firma].sort_values(by="Datum")
         istorija_prikaz = istorija_firme[["Mesec_Tekst", "Prihod"]].copy()
